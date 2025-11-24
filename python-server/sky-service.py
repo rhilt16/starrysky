@@ -53,9 +53,10 @@ targets = {
 
 
 @app.get("/sky")
-def get_sky(min_magnitude: float = 6.0, time: str = None, loc_N: float = -33.8688, loc_W: float = 151.2093, loc_elev: float = 43):
+def get_sky(min_magnitude: float = 3.0, time: str = None, loc_N: float = -33.8688, loc_W: float = 151.2093, loc_elev: float = 43):
     global celestial_bodies
     global observer
+    global old_magnitude
     
     if(request.args.get('time')):
         time = request.args.get('time')
@@ -77,6 +78,7 @@ def get_sky(min_magnitude: float = 6.0, time: str = None, loc_N: float = -33.868
     # Iterate through stars and compute positions
     count = 0
     added_count = 0
+    old_magnitude = min_magnitude
   
     for hip_id, star_data in stars_df.iterrows():
         star = Star(ra_hours=star_data['ra_degrees'] / 15.0,
@@ -131,9 +133,14 @@ def get_sky(min_magnitude: float = 6.0, time: str = None, loc_N: float = -33.868
         added_count += 1
 
     celestial_bodies.sort(key=lambda body: body.magnitude)
-    return jsonify({"count": count,  "added_count": added_count, "message": "This endpoint is under construction."})
+    data = {
+        "count": count,
+        "added_count": added_count
+    }
+    return send_res(200, data, "Sky ayo")
+    
 
-@app.get("/test")
+@app.get("/count")
 def get_stars_count(min_magnitude: float = 6.0, time: str = None, loc_N: float = -33.8688, loc_W: float = 151.2093, loc_elev: float = 43):
     if(request.args.get('time')):
         time = request.args.get('time')
@@ -142,12 +149,23 @@ def get_stars_count(min_magnitude: float = 6.0, time: str = None, loc_N: float =
     
     stars_df = df[df['magnitude'] <= min_magnitude]
     count = len(stars_df)
-    return jsonify({"count": count})
+
+    data = {
+        "count": count
+    }
+    return send_res(200, data, "Star count returned")
+    
 
 @app.get("/celestial-bodies")
 def get_celestial_bodies():
     global celestial_bodies
-    return jsonify({"names": [body.name for body in celestial_bodies], "bodies": [{"name": body.name, "magnitude": body.magnitude, "position": body.position} for body in celestial_bodies]})
+    
+    data = {
+        "names": [body.name for body in celestial_bodies],
+        "bodies": [{"name": body.name, "magnitude": body.magnitude, "position": body.position} for body in celestial_bodies]
+    }
+    return send_res(200, data, "Celestial bodies data returned")
+    
 
 # Greater Magnitude Threshold (Fainter Objects)
 @app.get("/zoom-out")
@@ -156,12 +174,16 @@ def zoom_out(new_magnitude: float=0.0):
     global observer
     global old_magnitude
 
+
     if(request.args.get('new_magnitude')):
         new_magnitude = float(request.args.get('new_magnitude'))
     else:
         response = make_response(jsonify({"message": "new_magnitude parameter is required."}), 400)
         return response
     
+
+    print(old_magnitude)
+    print(new_magnitude)
     if(old_magnitude >= new_magnitude):
         response = make_response(jsonify({"message": "new_magnitude must be greater than old_magnitude."}), 400)
         return response
@@ -229,7 +251,13 @@ def zoom_out(new_magnitude: float=0.0):
 
 
     celestial_bodies.sort(key=lambda body: body.magnitude)
-    return jsonify({"count": count,  "added_count": added_count, "message": "This endpoint is under construction."})
+    
+    data = {
+        "count": count,
+        "added_count": added_count
+    }
+    return send_res(200, data, "Zoomed out.")
+    
 
 @app.get("/zoom-in")
 def zoom_in(new_magnitude: float=0.0):
@@ -248,13 +276,31 @@ def zoom_in(new_magnitude: float=0.0):
     
     old_count = celestial_bodies.__len__()
     # Logic to remove celestial bodies with magnitude greater than new_magnitude
-    celestial_bodies = [body for body in celestial_bodies if body.magnitude <= new_magnitude]
+    new_celestial_bodies = [body for body in celestial_bodies if body.magnitude <= new_magnitude]
+    celestial_bodies.clear()
 
-    new_count = celestial_bodies.__len__()
+    new_count = new_celestial_bodies.__len__()
     old_magnitude = new_magnitude
 
-    return jsonify({"message": "Narrowed in.", "old_count": old_count, "new_count": new_count})
+    celestial_bodies = new_celestial_bodies.copy()
 
+    data = {
+        "old_count": old_count,
+        "count": new_count
+    }
+    return send_res(200, data, "Narrowed in.")
+
+def send_res(status_code, data: object, message):
+    if(status_code < 1):
+        status_code = 500
+    
+    response = make_response(jsonify({"data": {}, "message": message}), status_code)
+    
+    if(data):
+        response = make_response(jsonify({"data": data, "message": message}), status_code)
+    
+    
+    return response
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5001)
