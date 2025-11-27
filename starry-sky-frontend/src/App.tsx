@@ -7,12 +7,12 @@ import { DEFAULT_API_CONFIG } from './config';
 import { AxiosError, isAxiosError } from 'axios';
 import type { CelestialBodiesSchema } from './api/services/MainService';
 import { ScatterChart, type ScatterChartProps } from '@mui/x-charts/ScatterChart';
-
+import { ChartContainer } from '@mui/x-charts/ChartContainer';
 
 function App() {
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(false);
-  const [position, setPosition] = useState({ longitude: "-33.8688", latitude: "151.2093", magnitude: '3.0', elevation: '20.0' })
+  const [position, setPosition] = useState({ longitude: "-33.8688", latitude: "151.2093", magnitude: '6.0', elevation: '20.0' })
   const [oldMagnitude, setOldMagnitude] = useState('3.0');
   const [loadProgress, setLoadProgress] = useState(0);
   const [formVisibility, setFormVisibility] = useState(true);
@@ -26,6 +26,8 @@ function App() {
     z: Number
     id: String
   }
+
+
 
   const api = new ApiFactory(DEFAULT_API_CONFIG);
 
@@ -41,20 +43,20 @@ function App() {
   useEffect(() => {
     async function initialSky(){
       try {
-        const magnitude: number = 3;
+        const magnitude: number = 6;
         let initialCount: number = await checkCount(magnitude);
         if(initialCount === -1) {
           setCount(-1)
           return;
         }
         
-        const delay:  number = initialCount; // Simulated delay based on count difference
+        const delay:  number = initialCount / 10; // Simulated delay based on count difference
         console.log('waiting for about ' + delay + ' ms');
 
         moveLoadBar(delay);
         setLoading(true);
 
-        const response = await api.main.getSky('');
+        const response = await api.main.getSky('min_magnitude=6');
         
         setLoading(false);
         setOldMagnitude(position.magnitude);
@@ -265,8 +267,6 @@ function App() {
         });
       }
       
-
-      
     } catch (err: unknown) {
       console.error(err);
     }
@@ -305,6 +305,14 @@ function App() {
         const nonEmptyBuckets = Object.values(buckets).filter(
           (bucket) => bucket.length > 0
         );
+        const flatStars = Object.values(buckets_a)
+        .flat()
+        .map(v => ({
+          x: Number(v.position.alt),
+          y: Number(v.position.az),
+          id: v.name,
+        }));
+
         setBuckets(nonEmptyBuckets)
       }
       
@@ -335,7 +343,7 @@ function App() {
   }
   function moveLoadBar(loadingTime: number) {
     setLoadProgress(0);
-
+    console.log(Math.pow(loadingTime, 1.5));
     for (let i = 0; i <= 100; i++) {
       setTimeout(() => {
         setLoadProgress(i);
@@ -346,9 +354,16 @@ function App() {
 
   const valueFormatter = (value: any) => {
     if (value === null) return '';
-    console.log(value.id)
-    return value.id as string;
+    const entry = bodies_array.find((b)=> b.name === value.id)
+    if(entry){
+      return `Name: ${entry.name} | Other Names: ${entry.cata_names.toString()} | ID: ${entry.ID} | Distance : ${entry.position.distance_au.toExponential(2)} AU | Con: ${entry.constellation}` as string;
+    } else {
+      return `Name: ${value.id} | Distance: Unknown` as string;
+    }
+    
   }
+
+
 
 
   return (
@@ -472,15 +487,16 @@ function App() {
           </form>
           </div>
           )}
-          {((buckets_a)) && (
+          {((buckets_a)) &&  (
             <ScatterChart
               height={window.screen.height}
               width={window.screen.width}
               voronoiMaxRadius={50}
+              
               series={Object.entries(buckets_a).map(([key, bucket]) => ({
                 
-                highlightScope: {
-                  highlight: 'item', fade: 'none'
+                highlightScope: { 
+                  highlight: 'series', fade: 'none'
                 },
                 data: bucket.map(v => ({
                   x: Number(v.position.alt),
@@ -490,27 +506,38 @@ function App() {
                 })),
                 valueFormatter,
                 
-
-                
                 markerSize: calcMagSize(bucket[0].magnitude),
                
               }))}
-              
+
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    '.MuiChartsTooltip.value': {
+                      fontWeight: 'bold',
+                      color: 'red',
+                    },
+                    color: 'red',
+                  }
+                }
+              }}
+             
               
               zAxis={[{
                 colorMap: {
                   type: 'continuous',
                   min: -10,
                   max: maxMag,
-                  color: ['white', 'gold']
+                  color: ['turquoise', 'white']
                 }
               }]}
               xAxis={[{position: 'none'},
                 
               ]}
               yAxis={[{position: 'none'}]}
-               
-            />
+               >
+            </ScatterChart>
+           
           )}
         </div>
         )}

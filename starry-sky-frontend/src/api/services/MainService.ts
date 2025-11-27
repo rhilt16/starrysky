@@ -35,7 +35,10 @@ export interface CelestialBodiesPosition {
 
 export interface CelestialBodiesSchema {
     name: string;
+    cata_names: string[];
+    ID: string[];
     magnitude: number;
+    constellation: string;
     position: CelestialBodiesPosition;
 }
 

@@ -3,8 +3,8 @@ from flask import Flask, jsonify, request, make_response
 from skyfield.api import Star, load, wgs84, N, E, W, S
 from skyfield.data import hipparcos
 from skyfield.magnitudelib import planetary_magnitude
-from math import sin, cos, radians, degrees
 from flask_cors import CORS
+from open_data import load_datasets
 
 app = Flask(__name__)
 CORS(app)
@@ -16,42 +16,14 @@ class CelestialBody:
         self.position = position
 
 celestial_bodies = []
-old_magnitude = 0.0
-
 displayed_objects = []
-
-with load.open("hip_main.dat") as f:
-    df = hipparcos.load_dataframe(f)
-print(f"Loaded {len(df)} stars from Hipparcos catalog.")
-
-df = df[df['ra_degrees'].notnull()]
-
+old_magnitude = 0.0
 ts = load.timescale()
-planets = load('de405.bsp')
-sun = planets['sun']
-earth = planets['earth']
-observer = earth + wgs84.latlon(-33.8688 * N, 151.2093 * W, elevation_m=43)
 
-targets = {
-    "mercury": planets["mercury"],
-    "venus": planets["venus"],
-    "mars": planets["mars"],
-    "jupiter": planets["jupiter barycenter"],
-    "saturn": planets["saturn barycenter"],
-    "uranus": planets["uranus barycenter"],
-    "neptune": planets["neptune barycenter"]
-}
+# Load data into global variables 
+df, planets, star_names_df, id_to_names, targets, earth, observer, id_to_common_name = load_datasets()
 
-
-# So far, sky checks for magnitude and loops through all
-
-# Celestial bodies are stored globally
-
-# New endpoint to change magnitude threshold
-
-# New endpoint to change location
-
-
+# API Routes
 @app.get("/sky")
 def get_sky(min_magnitude: float = 3.0, time: str = None, loc_N: float = -33.8688, loc_W: float = 151.2093, loc_elev: float = 43):
     global celestial_bodies
@@ -159,10 +131,24 @@ def get_stars_count(min_magnitude: float = 6.0, time: str = None, loc_N: float =
 @app.get("/celestial-bodies")
 def get_celestial_bodies():
     global celestial_bodies
+    data_names = []
+    data_bodies = []
+    for body in celestial_bodies:
+        name = body.name
+        constellation = "none"
+        if body.name.strip("HIP ") in id_to_common_name:
+            name = id_to_common_name[body.name.strip("HIP ")][0]
+            constellation = id_to_common_name[body.name.strip("HIP ")][1]
+        data_names.append(name)
+        if body.name.strip("HIP ") in id_to_names:
+            data_bodies.append({"name": name, "cata_names": id_to_names[body.name.strip("HIP ")], "ID": body.name, "magnitude": body.magnitude, "constellation": constellation,  "position": body.position})
+        else: 
+            data_bodies.append({"name": name, "cata_names": 'none', "ID": body.name, "magnitude": body.magnitude, "constellation": constellation, "position": body.position})
+        
     
     data = {
-        "names": [body.name for body in celestial_bodies],
-        "bodies": [{"name": body.name, "magnitude": body.magnitude, "position": body.position} for body in celestial_bodies]
+        "names": data_names,
+        "bodies": data_bodies
     }
     return send_res(200, data, "Celestial bodies data returned")
     
